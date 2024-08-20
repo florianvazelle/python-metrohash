@@ -8,6 +8,8 @@ from setuptools import setup
 from setuptools.dist import Distribution
 from setuptools.extension import Extension
 
+from wheel.bdist_wheel import bdist_wheel
+
 try:
     from cpuinfo import get_cpu_info
 
@@ -38,6 +40,17 @@ class BinaryDistribution(Distribution):
 def get_system_bits():
     """Return 32 for 32-bit systems and 64 for 64-bit"""
     return struct.calcsize("P") * 8
+
+
+class bdist_wheel_abi3(bdist_wheel):
+    def get_tag(self):
+        python, abi, plat = super().get_tag()
+
+        if python.startswith("cp"):
+            # on CPython, our wheels are abi3 and compatible back to 3.6
+            return "cp36", "abi3", plat
+
+        return python, abi, plat
 
 
 SYSTEM = os.name
@@ -96,14 +109,13 @@ CXXSOURCES = [
     "src/metrohash128.cc",
 ]
 
-
+CMDCLASS = {"bdist_wheel": bdist_wheel_abi3}
 if USE_CYTHON:
     print("building extension using Cython")
-    CMDCLASS = {"build_ext": build_ext}
+    CMDCLASS["build_ext"] = build_ext
     SRC_EXT = ".pyx"
 else:
     print("building extension w/o Cython")
-    CMDCLASS = {}
     SRC_EXT = ".cpp"
 
 EXT_MODULES = [
@@ -114,6 +126,8 @@ EXT_MODULES = [
         language="c++",
         extra_compile_args=CXXFLAGS,
         include_dirs=["src"],
+        define_macros=[("Py_LIMITED_API", "0x03060000")],
+        py_limited_api=True,
     ),
 ]
 
